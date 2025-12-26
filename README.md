@@ -1,4 +1,4 @@
-# rerank_for_dify
+# llama.cpp rerank_for_dify
 
 ## 直接执行二进制程序
 
