@@ -48,3 +48,19 @@ cmake --build build --config Release -j$(nproc)
 ```
 编译完成后，运行
 `./build/bin/llama-server -h` 测试
+
+# 请求方式
+```
+curl -X POST http://host.docker.internal:11435/v1/rerank \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen3-reranker",
+    "query": "Apple",
+    "documents": [
+      "apple",
+      "banana",
+      "fruit",
+      "vegetable"
+    ]
+  }'
+```
