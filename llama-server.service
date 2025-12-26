@@ -1,0 +1,14 @@
+[Unit]
+Description=Dify Service
+After=network-online.target
+
+[Service]
+# 执行启动脚本
+ExecStart=/root/start_llama.sh
+User=root
+Group=root
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
