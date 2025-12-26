@@ -19,10 +19,11 @@ export LD_LIBRARY_PATH=/usr/local/lib/ollama/cuda_v13:$LD_LIBRARY_PATH
 # Test if llama-server is executable, -h outputs help information
 ./llama-server -h
 
-# 下载bge-reranker-v2-m3的FP16格式GGUF模型文件
+# 下载bge-reranker-v2-m3的FP16格式GGUF模型文件（输出的分值用import math def sigmoid(x): 去返回0到1的分值）
 # Download FP16-format GGUF model file of bge-reranker-v2-m3
 wget https://www.modelscope.cn/models/gpustack/bge-reranker-v2-m3-GGUF/resolve/master/bge-reranker-v2-m3-FP16.gguf
-# wget https://www.modelscope.cn/models/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF/resolve/master/qwen3-reranker-0.6b-q8_0.gguf
+# 使用Qwen3-rerank无需归一化，直接输出的就是（0，1）的分值
+wget https://www.modelscope.cn/models/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF/resolve/master/qwen3-reranker-0.6b-q8_0.gguf
 
 # 启动服务，加载重排序模型并绑定11436端口
 # Start server, load reranking model and bind port 11436
