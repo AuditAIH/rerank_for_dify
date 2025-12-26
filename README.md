@@ -11,7 +11,7 @@ mkdir -p llama.cpp_rerank && wget -O - https://github.com/AuditAIH/llama.cpp_rer
 # Switch working directory to the extracted program directory
 cd llama.cpp_rerank
 
-# 添加CUDA v13库路径，解决程序运行依赖
+# 添加CUDA v13库路径，解决程序运行依赖，如果没有安装ollama，则需要从英伟达官网自行安装cuda13
 # Add CUDA v13 lib path to resolve program runtime dependencies
 export LD_LIBRARY_PATH=/usr/local/lib/ollama/cuda_v13:$LD_LIBRARY_PATH
 
