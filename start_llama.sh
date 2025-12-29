@@ -9,11 +9,6 @@
   --port 11435 \
   --no-webui \
   --rerank \
-  --pooling rank \
   --ctx-size 8192 \
-  --ubatch-size 4096 \
-  --batch-size 4096 \
-  --n-gpu-layers 64 \
-  --threads 16 \
-  --no-mmap \
+  --n-gpu-layers 99 \
   --verbose
