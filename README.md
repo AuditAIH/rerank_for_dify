@@ -66,4 +66,23 @@ curl -X POST http://host.docker.internal:11435/v1/rerank \
   }'
 ```
 
-# 集成Dify：https://github.com/AuditAIH/dify-official-plugins/blob/ollama_rerank_readme/models/ollama/README.md
+# 集成Dify：
+https://github.com/AuditAIH/dify-official-plugins/blob/ollama_rerank_readme/models/ollama/README.md
+
+#### 5. Integrate Ollama Rerank in Dify
+Hint: ollama officially does not support rerank models, please try locally deploying tools like vllm, llama.cpp, tei, xinference, etc., and fill in the complete URL ending with "rerank". Deployment reference [llama.cpp deployment tutorial for Qwen3-Reranker](https://github.com/AuditAIH/rerank_for_dify)
+
+In `Settings > Model Providers > Ollama`, fill in:
+
+![](./_assets/ollama_rerank.png)
+
+- Model Name：`Qwen3-Reranker`
+- Base URL: `http://<your-ollama-endpoint-domain>:11434` or Ending with “rerank” `http://<your-ollama-endpoint-domain>:11434/api/rerank`
+- Enter the base URL where the Ollama service is accessible.
+- If Dify is deployed using Docker, consider using the local network IP address, e.g., `http://192.168.1.100:11434` or `http://172.17.0.1:11434` or `http://host.docker.internal:11434` to access the service.
+- from llama.cpp , consider using the local network `http://host.docker.internal:11435/v1/rerank`
+- Model Type: `Rerank`
+- Model Context Length: `4096`
+
+Click "Add" to use the model in the application after verifying that there are no errors.
+
