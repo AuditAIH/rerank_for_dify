@@ -65,3 +65,5 @@ curl -X POST http://host.docker.internal:11435/v1/rerank \
     ]
   }'
 ```
+
+# 集成Dify：https://github.com/AuditAIH/dify-official-plugins/blob/ollama_rerank_readme/models/ollama/README.md
