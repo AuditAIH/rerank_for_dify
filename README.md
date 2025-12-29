@@ -74,7 +74,7 @@ Hint: ollama officially does not support rerank models, please try locally deplo
 
 In `Settings > Model Providers > Ollama`, fill in:
 
-![](./_assets/ollama_rerank.png)
+[![](./_assets/ollama_rerank.png)](https://github.com/langgenius/dify-official-plugins/blob/83e171772301b170ec27343c6bffbc5f33fe42c9/models/ollama/_assets/ollama_rerank.png)
 
 - Model Name：`Qwen3-Reranker`
 - Base URL: `http://<your-ollama-endpoint-domain>:11434` or Ending with “rerank” `http://<your-ollama-endpoint-domain>:11434/api/rerank`
