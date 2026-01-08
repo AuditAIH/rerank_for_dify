@@ -1,5 +1,12 @@
 # llama.cpp rerank_for_dify
 
+## 快速开始 （Quick Start）
+
+```
+# -q：静默模式（不输出下载日志）；-O-：将内容输出到标准输出（而非文件）；| bash：传递给bash执行
+wget -qO- https://raw.githubusercontent.com/AuditAIH/rerank_for_dify/main/startup_llama.cpp.sh | sudo bash
+
+```
 ## 直接执行二进制程序
 
 ```
