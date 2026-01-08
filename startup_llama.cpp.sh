@@ -173,6 +173,10 @@ set -e
 LLAMA_SERVER_PATH="${LLAMA_SERVER_PATH}"
 MODEL_FILE_PATH="${MODEL_FILE_PATH}"
 CUDA_LIB_DIR="${CUDA_LIB_DIR}"
+LLAMA_ROOT_DIR="${LLAMA_ROOT_DIR}"
+
+# 修正：切换到主脚本定义的工作目录（而非固定硬编码路径）
+cd "\$LLAMA_ROOT_DIR" || exit
 
 # 仅GPU模式配置动态库，CPU模式无操作
 [ -n "\$CUDA_LIB_DIR" ] && export LD_LIBRARY_PATH="\$CUDA_LIB_DIR:\$LD_LIBRARY_PATH"
