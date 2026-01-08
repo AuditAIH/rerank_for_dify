@@ -1,8 +1,7 @@
 #!/bin/bash
 set -e  # 遇到错误立即退出，保证脚本健壮性
 
-# ====================== 第一步：定义核心变量（方便后续维护） ======================
-echo -e "\033[34m【步骤1/10】初始化核心配置变量...\033[0m"
+# ====================== 核心配置（全内置，无外部依赖） ======================
 # CUDA 13官方默认动态链接库路径（64位系统）
 CUDA13_LIB_PATH="/usr/local/cuda-13/lib64"
 # ollama自带的CUDA 13动态链接库路径
@@ -13,17 +12,19 @@ LLAMA_DOWNLOAD_URL="https://github.com/AuditAIH/llama.cpp_rerank/releases/downlo
 GH_PROXY_PREFIX="https://gh-proxy.org/"
 # 重排序模型下载地址
 MODEL_DOWNLOAD_URL="https://www.modelscope.cn/models/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF/resolve/master/qwen3-reranker-0.6b-q8_0.gguf"
-# 工作目录（llama.cpp_rerank的根目录）
-LLAMA_ROOT_DIR="$PWD/llama.cpp_rerank"
-# 启动脚本路径
-START_SCRIPT_PATH="$PWD/start_llama.sh"
+# 工作目录（固定路径，避免依赖PWD）
+LLAMA_ROOT_DIR="/opt/llama.cpp_rerank"
+# 启动脚本自身路径（固定路径，确保独立）
+START_SCRIPT_PATH="/usr/local/bin/start_llama.sh"
 # systemd服务文件路径
 SERVICE_FILE_PATH="/etc/systemd/system/llama-server.service"
 # 模型文件完整路径
-MODEL_FILE_PATH="$LLAMA_ROOT_DIR/qwen3-reranker-0.6b-q8_0.gguf"
+MODEL_FILE_PATH="${LLAMA_ROOT_DIR}/qwen3-reranker-0.6b-q8_0.gguf"
+# llama-server可执行文件路径
+LLAMA_SERVER_PATH="${LLAMA_ROOT_DIR}/llama-server"
 
-# ====================== 第二步：检测CUDA环境 ======================
-echo -e "\033[34m【步骤2/10】检测CUDA 13动态链接库...\033[0m"
+# ====================== 第一步：检测CUDA环境 ======================
+echo -e "\033[34m【步骤1/9】检测CUDA 13动态链接库...\033[0m"
 # 初始化CUDA库路径变量
 CUDA_LIB_DIR=""
 
@@ -42,13 +43,13 @@ else
     exit 1  # 退出脚本，避免后续无效操作
 fi
 
-# ====================== 第三步：创建工作目录 ======================
-echo -e "\033[34m【步骤3/10】创建llama.cpp_rerank工作目录...\033[0m"
+# ====================== 第二步：创建工作目录 ======================
+echo -e "\033[34m【步骤2/9】创建llama.cpp_rerank工作目录...\033[0m"
 mkdir -p "$LLAMA_ROOT_DIR"
-echo -e "\033[32m✅ 目录创建成功：$LLAMA_ROOT_DIR\033[0m"
+echo -e "\033[32m✅ 目录已就绪：$LLAMA_ROOT_DIR\033[0m"
 
-# ====================== 第四步：下载预编译包（支持代理） ======================
-echo -e "\033[34m【步骤4/10】尝试下载llama.cpp_rerank预编译包...\033[0m"
+# ====================== 第三步：下载预编译包（支持代理+重复执行兼容） ======================
+echo -e "\033[34m【步骤3/9】检查并下载llama.cpp_rerank预编译包...\033[0m"
 
 # 定义下载函数（带超时检测）
 download_llama_package() {
@@ -86,33 +87,47 @@ download_llama_package() {
     fi
 }
 
-# 执行下载（先尝试原始地址）
-download_llama_package "$LLAMA_DOWNLOAD_URL"
-
-# ====================== 第五步：下载Qwen3-Reranker模型文件 ======================
-echo -e "\033[34m【步骤5/10】下载Qwen3-Reranker模型文件...\033[0m"
-wget -q --show-progress -O "$MODEL_FILE_PATH" "$MODEL_DOWNLOAD_URL"
-if [ -f "$MODEL_FILE_PATH" ]; then
-    echo -e "\033[32m✅ 模型文件下载完成：$MODEL_FILE_PATH\033[0m"
+# 检查预编译包是否已存在，避免重复下载
+if [ -f "$LLAMA_SERVER_PATH" ]; then
+    echo -e "\033[33mℹ️  预编译包已存在，跳过下载：$LLAMA_SERVER_PATH\033[0m"
 else
-    echo -e "\033[31m❌ 模型文件下载失败，请检查网络或下载地址！\033[0m"
-    exit 1
+    # 执行下载（先尝试原始地址）
+    download_llama_package "$LLAMA_DOWNLOAD_URL"
 fi
 
-# ====================== 第六步：创建start_llama.sh启动脚本（仅此处配置CUDA路径） ======================
-echo -e "\033[34m【步骤6/10】创建启动脚本start_llama.sh（配置CUDA库路径）...\033[0m"
-# 拼接llama-server的完整路径
-LLAMA_SERVER_PATH="$LLAMA_ROOT_DIR/llama-server"
+# ====================== 第四步：下载Qwen3-Reranker模型文件（重复执行兼容） ======================
+echo -e "\033[34m【步骤4/9】检查并下载Qwen3-Reranker模型文件...\033[0m"
+if [ -f "$MODEL_FILE_PATH" ]; then
+    echo -e "\033[33mℹ️  模型文件已存在，跳过下载：$MODEL_FILE_PATH\033[0m"
+else
+    wget -q --show-progress -O "$MODEL_FILE_PATH" "$MODEL_DOWNLOAD_URL"
+    if [ -f "$MODEL_FILE_PATH" ]; then
+        echo -e "\033[32m✅ 模型文件下载完成：$MODEL_FILE_PATH\033[0m"
+    else
+        echo -e "\033[31m❌ 模型文件下载失败，请检查网络或下载地址！\033[0m"
+        exit 1
+    fi
+fi
 
-# 写入启动脚本内容（仅此处配置CUDA库路径，无临时环境变量）
+# ====================== 第五步：创建独立的启动脚本（全内置配置） ======================
+echo -e "\033[34m【步骤5/9】创建/更新独立启动脚本...\033[0m"
+
+# 写入启动脚本内容（所有配置全内置，无外部依赖）
 cat > "$START_SCRIPT_PATH" << EOF
 #!/bin/bash
-# 仅在启动脚本中配置CUDA 13库路径（永久生效）
-export LD_LIBRARY_PATH="$CUDA_LIB_DIR:\$LD_LIBRARY_PATH"
+set -e
+
+# 内置固定配置（确保脚本完全独立）
+CUDA_LIB_DIR="${CUDA_LIB_DIR}"
+LLAMA_SERVER_PATH="${LLAMA_SERVER_PATH}"
+MODEL_FILE_PATH="${MODEL_FILE_PATH}"
+
+# 配置CUDA 13库路径（永久生效）
+export LD_LIBRARY_PATH="\${CUDA_LIB_DIR}:\$LD_LIBRARY_PATH"
 echo -e "\033[33m🔧 已配置CUDA库路径：LD_LIBRARY_PATH=\$LD_LIBRARY_PATH\033[0m"
 
 # 测试llama-server可执行性
-if ! "\$LLAMA_SERVER_PATH" -h > /dev/null 2>&1; then
+if ! "\${LLAMA_SERVER_PATH}" -h > /dev/null 2>&1; then
     echo -e "\033[31m❌ llama-server执行失败，请检查CUDA库或预编译包！\033[0m"
     exit 1
 fi
@@ -120,8 +135,8 @@ echo -e "\033[32m✅ llama-server可执行性测试通过！\033[0m"
 
 # 启动llama-server
 echo -e "\033[33m🚀 启动llama-server（重排序模式）...\033[0m"
-"$LLAMA_SERVER_PATH" \
-  --model "$MODEL_FILE_PATH" \
+"\${LLAMA_SERVER_PATH}" \
+  --model "\${MODEL_FILE_PATH}" \
   --host 0.0.0.0 \
   --port 11435 \
   --no-webui \
@@ -133,55 +148,49 @@ EOF
 
 # 添加可执行权限
 chmod +x "$START_SCRIPT_PATH"
-echo -e "\033[32m✅ 启动脚本创建完成：$START_SCRIPT_PATH\033[0m"
+echo -e "\033[32m✅ 独立启动脚本已就绪：$START_SCRIPT_PATH\033[0m"
 
-# ====================== 第七步：创建systemd开机自启服务 ======================
-echo -e "\033[34m【步骤7/10】创建systemd服务文件...\033[0m"
+# ====================== 第六步：创建systemd开机自启服务 ======================
+echo -e "\033[34m【步骤6/9】创建/更新systemd服务文件...\033[0m"
 cat > "$SERVICE_FILE_PATH" << EOF
 [Unit]
 Description=Llama Server for Rerank
 After=network-online.target
 
 [Service]
-ExecStart=$START_SCRIPT_PATH
+ExecStart=${START_SCRIPT_PATH}
 User=root
 Group=root
 Restart=always
 RestartSec=3
-# 服务中无需重复配置CUDA路径，启动脚本已包含
+# 所有配置已内置在启动脚本中，无需额外配置
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-echo -e "\033[32m✅ systemd服务文件创建完成：$SERVICE_FILE_PATH\033[0m"
+echo -e "\033[32m✅ systemd服务文件已就绪：$SERVICE_FILE_PATH\033[0m"
 
-# ====================== 第八步：重新加载systemd并设置开机自启 ======================
-echo -e "\033[34m【步骤8/10】配置开机自启并启动服务...\033[0m"
+# ====================== 第七步：仅配置开机自启（不立即启动服务） ======================
+echo -e "\033[34m【步骤7/9】配置开机自启（系统重启后自动启动）...\033[0m"
 # 重新加载systemd配置
 systemctl daemon-reload
-# 设置开机自启
-systemctl enable llama-server
-# 启动服务
-systemctl start llama-server
+# 仅设置开机自启，不执行start
+systemctl enable llama-server > /dev/null 2>&1
+echo -e "\033[32m✅ 已配置llama-server开机自启（系统重启后自动启动）\033[0m"
 
-# 检查服务状态
-if systemctl is-active --quiet llama-server; then
-    echo -e "\033[32m✅ llama-server服务启动成功！\033[0m"
-else
-    echo -e "\033[31m❌ llama-server服务启动失败，请执行 systemctl status llama-server 查看详情！\033[0m"
-fi
+# ====================== 第八步：在当前会话直接启动服务 ======================
+echo -e "\033[34m【步骤8/9】在当前会话启动llama-server...\033[0m"
+echo -e "\033[33m🔧 执行启动脚本：$START_SCRIPT_PATH\033[0m"
+# 直接在当前会话执行启动脚本（非后台，便于查看日志）
+bash "$START_SCRIPT_PATH"
 
-# ====================== 第九步：执行启动脚本（双重保障） ======================
-echo -e "\033[34m【步骤9/10】执行启动脚本start_llama.sh...\033[0m"
-# 后台执行启动脚本，避免阻塞终端
-bash "$START_SCRIPT_PATH" &
-echo -e "\033[32m🎉 所有操作完成！llama-server已启动，监听端口11435\033[0m"
-
-# ====================== 第十步：输出常用命令 ======================
-echo -e "\033[34m【步骤10/10】输出常用运维命令...\033[0m"
+# ====================== 第九步：输出常用命令 ======================
+echo -e "\033[34m【步骤9/9】输出常用运维命令...\033[0m"
 echo -e "\033[33m📌 常用命令：\033[0m"
-echo -e "  - 查看服务状态：systemctl status llama-server"
-echo -e "  - 重启服务：systemctl restart llama-server"
-echo -e "  - 停止服务：systemctl stop llama-server"
-echo -e "  - 手动启动：bash $START_SCRIPT_PATH"
+echo -e "  - 查看开机自启状态：systemctl is-enabled llama-server"
+echo -e "  - 手动重启服务（后续）：systemctl restart llama-server"
+echo -e "  - 手动停止服务（后续）：systemctl stop llama-server"
+echo -e "  - 再次手动启动：${START_SCRIPT_PATH}"
+echo -e "\033[32m🎉 操作完成！llama-server已在当前会话启动，监听端口11435\033[0m"
+echo -e "\033[33mℹ️  系统重启后，llama-server会自动启动\033[0m"
