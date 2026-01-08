@@ -161,24 +161,29 @@ else
     fi
 fi
 
-# ====================== 第六步：创建独立的启动脚本 ======================
+# ====================== 第六步：创建独立的启动脚本（仅保留动态库+核心启动参数） ======================
 echo -e "\033[34m【步骤6/10】创建/更新独立启动脚本...\033[0m"
 
-# 写入启动脚本内容（适配CPU/GPU模式）
+# 写入极简版启动脚本（仅动态库配置+核心启动参数）
 cat > "$START_SCRIPT_PATH" << EOF
 #!/bin/bash
 set -e
 
-# 启动llama-server
-echo -e "\033[33m🚀 启动llama-server（重排序模式）...\033[0m"
-"\${LLAMA_SERVER_PATH}" \
-  --model "\${MODEL_FILE_PATH}" \
+# 硬编码路径（从主脚本传递）
+LLAMA_SERVER_PATH="${LLAMA_SERVER_PATH}"
+MODEL_FILE_PATH="${MODEL_FILE_PATH}"
+CUDA_LIB_DIR="${CUDA_LIB_DIR}"
+
+# 仅GPU模式配置动态库，CPU模式无操作
+[ -n "\$CUDA_LIB_DIR" ] && export LD_LIBRARY_PATH="\$CUDA_LIB_DIR:\$LD_LIBRARY_PATH"
+
+# 核心启动参数（仅保留必需项）
+"\$LLAMA_SERVER_PATH" \
+  --model "\$MODEL_FILE_PATH" \
   --host 0.0.0.0 \
   --port 11435 \
-  --no-webui \
   --rerank \
-  --ctx-size 8192 \
-  --verbose
+  --ctx-size 8192
 EOF
 
 # 添加可执行权限
