@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e  # 遇到错误立即退出，保证脚本健壮性
 
-# ====================== 核心配置（全内置，无外部依赖） ======================
+# ====================== 核心配置（恢复原路径，不修改为固定/opt） ======================
 # CUDA 13官方默认动态链接库路径（64位系统）
 CUDA13_LIB_PATH="/usr/local/cuda-13/lib64"
 # ollama自带的CUDA 13动态链接库路径
@@ -12,16 +12,16 @@ LLAMA_DOWNLOAD_URL="https://github.com/AuditAIH/llama.cpp_rerank/releases/downlo
 GH_PROXY_PREFIX="https://gh-proxy.org/"
 # 重排序模型下载地址
 MODEL_DOWNLOAD_URL="https://www.modelscope.cn/models/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF/resolve/master/qwen3-reranker-0.6b-q8_0.gguf"
-# 工作目录（固定路径，避免依赖PWD）
-LLAMA_ROOT_DIR="/opt/llama.cpp_rerank"
-# 启动脚本自身路径（固定路径，确保独立）
-START_SCRIPT_PATH="/usr/local/bin/start_llama.sh"
+# 恢复你原有的工作目录（基于当前执行目录，不修改）
+LLAMA_ROOT_DIR="$PWD/llama.cpp_rerank"
+# 恢复你原有的启动脚本路径（基于当前执行目录）
+START_SCRIPT_PATH="$PWD/start_llama.sh"
 # systemd服务文件路径
 SERVICE_FILE_PATH="/etc/systemd/system/llama-server.service"
 # 模型文件完整路径
-MODEL_FILE_PATH="${LLAMA_ROOT_DIR}/qwen3-reranker-0.6b-q8_0.gguf"
+MODEL_FILE_PATH="$LLAMA_ROOT_DIR/qwen3-reranker-0.6b-q8_0.gguf"
 # llama-server可执行文件路径
-LLAMA_SERVER_PATH="${LLAMA_ROOT_DIR}/llama-server"
+LLAMA_SERVER_PATH="$LLAMA_ROOT_DIR/llama-server"
 
 # ====================== 第一步：检测CUDA环境 ======================
 echo -e "\033[34m【步骤1/9】检测CUDA 13动态链接库...\033[0m"
