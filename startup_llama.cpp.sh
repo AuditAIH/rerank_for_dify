@@ -195,7 +195,7 @@ echo -e "\033[33m🚀 启动llama-server（重排序模式）...\033[0m"
 "\${LLAMA_SERVER_PATH}" \
   --model "\${MODEL_FILE_PATH}" \
   --host 0.0.0.0 \
-  --port 11437 \
+  --port 11435 \
   --no-webui \
   --rerank \
   --ctx-size 8192 \
