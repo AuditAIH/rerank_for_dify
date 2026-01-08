@@ -51,7 +51,7 @@ if [ "$use_cpu_flag" = true ]; then
     echo -e "\033[33m🔧 检测到--cpu参数，将下载CPU版本llama.cpp：$LLAMA_DOWNLOAD_URL\033[0m"
 else
     # 原始GPU版本下载地址
-    LLAMA_DOWNLOAD_URL="https://github.com/AuditAIH/llama.cpp_rerank/releases/download/0.01/llama.cpp_rerank.tar.gz"
+    LLAMA_DOWNLOAD_URL="https://github.com/AuditAIH/llama.cpp_rerank/releases/download/0.0.2/llama.cpp.tar.gz"
 fi
 # 基础可执行文件路径（后续会验证/修正）
 LLAMA_SERVER_PATH="$LLAMA_ROOT_DIR/llama-server"
@@ -168,27 +168,6 @@ echo -e "\033[34m【步骤6/10】创建/更新独立启动脚本...\033[0m"
 cat > "$START_SCRIPT_PATH" << EOF
 #!/bin/bash
 set -e
-
-# 内置配置（适配CPU/GPU模式）
-CUDA_LIB_DIR="${CUDA_LIB_DIR}"
-LLAMA_SERVER_PATH="${LLAMA_SERVER_PATH}"
-MODEL_FILE_PATH="${MODEL_FILE_PATH}"
-USE_CPU_MODE=${use_cpu_flag}
-
-# GPU模式配置CUDA路径，CPU模式跳过
-if [ "\$USE_CPU_MODE" = false ]; then
-    export LD_LIBRARY_PATH="\${CUDA_LIB_DIR}:\$LD_LIBRARY_PATH"
-    echo -e "\033[33m🔧 已配置CUDA库路径：LD_LIBRARY_PATH=\$LD_LIBRARY_PATH\033[0m"
-else
-    echo -e "\033[33m🔧 CPU模式，无需配置CUDA库路径\033[0m"
-fi
-
-# 测试llama-server可执行性
-if ! "\${LLAMA_SERVER_PATH}" -h > /dev/null 2>&1; then
-    echo -e "\033[31m❌ llama-server执行失败，请检查预编译包！\033[0m"
-    exit 1
-fi
-echo -e "\033[32m✅ llama-server可执行性测试通过！\033[0m"
 
 # 启动llama-server
 echo -e "\033[33m🚀 启动llama-server（重排序模式）...\033[0m"
