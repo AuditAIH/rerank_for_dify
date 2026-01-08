@@ -12,7 +12,7 @@ wget -qO- https://raw.githubusercontent.com/AuditAIH/rerank_for_dify/main/startu
 ```
 # 创建目录并下载解压预编译包，-p确保目录存在
 # Create dir & download/extract precompiled package (-p ensures dir existence)
-mkdir -p llama.cpp_rerank && wget -O - https://github.com/AuditAIH/llama.cpp_rerank/releases/download/0.01/llama.cpp_rerank.tar.gz | tar -zxf - -C llama.cpp_rerank/
+mkdir -p llama.cpp_rerank && wget -O - https://github.com/AuditAIH/llama.cpp_rerank/releases/download/0.0.2/llama.cpp.tar.gz | tar -zxf - -C llama.cpp_rerank/
 
 # 切换工作目录到解压后的程序目录
 # Switch working directory to the extracted program directory
