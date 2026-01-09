@@ -44,7 +44,7 @@ sudo apt update && apt install -y cmake gcc g++ libcurl4-openssl-dev
 ```
 如需下载cuda，apt install -y nvidia-cuda-toolkit [参考NVDIA官网](https://developer.nvidia.com/cuda-13-0-2-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=24.04&target_type=deb_local)
 ```
-# 下载最新版本的llama.cpp (指定截止今日的标签）
+# 下载最新版本的llama.cpp (指定截止2025.12.24的标签）
 git clone -b b7524 --depth 1 https://github.com/ggml-org/llama.cpp
 
 cd llama.cpp
