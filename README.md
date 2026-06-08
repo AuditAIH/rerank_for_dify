@@ -45,11 +45,12 @@ sudo apt update && apt install -y cmake gcc g++ libcurl4-openssl-dev
 如需下载cuda，apt install -y nvidia-cuda-toolkit [参考NVDIA官网](https://developer.nvidia.com/CUDA-TOOLKIT-ARCHIVE)
 ```
 # 下载最新版本的llama.cpp (指定截止2025.12.24的标签）
-git clone -b b7524 --depth 1 https://github.com/ggml-org/llama.cpp
+git clone --depth 1 https://github.com/ggml-org/llama.cpp # -b b7524 #指定版本
 
 cd llama.cpp
 
-cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release
+ # -DGGML_NATIVE=OFF 非本地GPU构建，可以迁移到别的不同GPU
+cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF
 
 # 2. 并行编译（核心加速！-j 后接线程数，$(nproc) 自动获取 CPU 核心数）
 cmake --build build --config Release -j$(nproc)
