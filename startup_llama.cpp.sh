@@ -1,240 +1,147 @@
 #!/bin/bash
-set -e  # 遇到错误立即退出，保证脚本健壮性
+set -euo pipefail
+IFS=$'\n\t'
 
-# ====================== 第一步：解析命令行参数 ======================
-# 初始化参数标志
-use_proxy_flag=false  # 是否强制使用代理
-use_cpu_flag=false    # 是否下载CPU版本
+# ====================== 配置区（Qwen3-Reranker 0.6B Q8_0 重排序专用） ======================
+OLLAMA_ROOT="/usr/local/lib/ollama"
+LLAMA_SERVER_BIN="${OLLAMA_ROOT}/llama-server"
 
-# 解析参数
-for arg in "$@"; do
-    case $arg in
-        --proxy)
-        use_proxy_flag=true
-        shift # 移除已解析的参数
-        ;;
-        --cpu)
-        use_cpu_flag=true
-        shift # 移除已解析的参数
-        ;;
-        *)
-        # 未知参数提示
-        echo -e "\033[31m❌ 未知参数：$arg\033[0m"
-        echo -e "\033[33m支持的参数：--proxy（强制使用代理下载）、--cpu（下载CPU版本llama.cpp）\033[0m"
-        exit 1
-        ;;
-    esac
-done
+# 使用真实物理模型目录，不使用___软链接目录
+MODEL_DIR="${HOME}/.cache/modelscope/hub/models/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF"
+MAIN_FILE="qwen3-reranker-0.6b-q8_0.gguf"
+HASH_FILE="${MODEL_DIR}/model_hash.txt"
+MODEL_ABS="${MODEL_DIR}/${MAIN_FILE}"
 
-# ====================== 核心配置（保留你的原始路径） ======================
-# CUDA 13官方默认动态链接库路径（64位系统）
-CUDA13_LIB_PATH="/usr/local/cuda-13/lib64"
-# ollama自带的CUDA 13动态链接库路径
-OLLAMA_CUDA_PATH="/usr/local/lib/ollama/cuda_v13"
-# GitHub代理前缀
-GH_PROXY_PREFIX="https://gh-proxy.org/"
-# 重排序模型下载地址
+# 模型直链下载地址
 MODEL_DOWNLOAD_URL="https://www.modelscope.cn/models/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF/resolve/master/qwen3-reranker-0.6b-q8_0.gguf"
-# 保留你原有的工作目录（基于当前执行目录）
-LLAMA_ROOT_DIR="$PWD/llama.cpp_rerank"
-# 保留你原有的启动脚本路径
-START_SCRIPT_PATH="$PWD/start_llama.sh"
-# systemd服务文件路径
-SERVICE_FILE_PATH="/etc/systemd/system/llama-server.service"
-# 模型文件完整路径
-MODEL_FILE_PATH="$LLAMA_ROOT_DIR/qwen3-reranker-0.6b-q8_0.gguf"
 
-# 根据--cpu参数选择下载地址
-if [ "$use_cpu_flag" = true ]; then
-    # CPU版本下载地址
-    LLAMA_DOWNLOAD_URL="https://github.com/ggml-org/llama.cpp/releases/download/b7524/llama-b7524-bin-ubuntu-x64.tar.gz"
-    echo -e "\033[33m🔧 检测到--cpu参数，将下载CPU版本llama.cpp：$LLAMA_DOWNLOAD_URL\033[0m"
-else
-    # 原始GPU版本下载地址
-    LLAMA_DOWNLOAD_URL="https://github.com/AuditAIH/llama.cpp_rerank/releases/download/0.0.2/llama.cpp.tar.gz"
-fi
-# 基础可执行文件路径（后续会验证/修正）
-LLAMA_SERVER_PATH="$LLAMA_ROOT_DIR/llama-server"
+# 服务参数
+PORT=11435
+HOST="0.0.0.0"
+TEMP=0
+CUDA_DEV=0
+START_SCRIPT_NAME="llama.cpp_qwen3_reranker_0.6b.sh"
+# ========================================================================
 
-# ====================== 第二步：检测CUDA环境（仅非CPU模式需要） ======================
-if [ "$use_cpu_flag" = false ]; then
-    echo -e "\033[34m【步骤1/10】检测CUDA 13动态链接库...\033[0m"
-    # 初始化CUDA库路径变量
-    CUDA_LIB_DIR=""
-
-    # 1. 检测官方CUDA 13
-    if [ -d "$CUDA13_LIB_PATH" ]; then
-        echo -e "\033[32m✅ 检测到官方CUDA 13库：$CUDA13_LIB_PATH\033[0m"
-        CUDA_LIB_DIR="$CUDA13_LIB_PATH"
-    # 2. 检测ollama自带的CUDA 13
-    elif [ -d "$OLLAMA_CUDA_PATH" ]; then
-        echo -e "\033[32m✅ 检测到ollama自带的CUDA 13库：$OLLAMA_CUDA_PATH\033[0m"
-        CUDA_LIB_DIR="$OLLAMA_CUDA_PATH"
-    # 3. 两者都不存在，提示下载
-    else
-        echo -e "\033[31m❌ 未检测到CUDA 13或ollama自带的CUDA 13库！\033[0m"
-        echo -e "\033[33m请前往NVIDIA官网下载CUDA 13：https://developer.nvidia.com/cuda-13-0-0-download-archive\033[0m"
-        exit 1  # 退出脚本，避免后续无效操作
-    fi
-else
-    # CPU模式跳过CUDA检测
-    echo -e "\033[34m【步骤1/10】CPU模式，跳过CUDA环境检测...\033[0m"
-    CUDA_LIB_DIR=""  # CPU模式无需CUDA路径
-fi
-
-# ====================== 第三步：创建工作目录 ======================
-echo -e "\033[34m【步骤2/10】创建llama.cpp_rerank工作目录...\033[0m"
-mkdir -p "$LLAMA_ROOT_DIR"
-echo -e "\033[32m✅ 目录已就绪：$LLAMA_ROOT_DIR\033[0m"
-
-# ====================== 第四步：下载预编译包（支持--proxy参数，跳过检测） ======================
-echo -e "\033[34m【步骤3/10】下载llama.cpp预编译包...\033[0m"
-
-# 定义下载函数（支持强制代理）
-download_llama_package() {
-    local base_url=$1
-    local final_url=""
-
-    # 如果指定--proxy，直接使用代理地址
-    if [ "$use_proxy_flag" = true ]; then
-        final_url="${GH_PROXY_PREFIX}${base_url}"
-        echo -e "\033[33m🔧 检测到--proxy参数，强制使用代理下载：$final_url\033[0m"
-    else
-        final_url=$base_url
-        echo -e "\033[33m🔧 使用原始地址下载：$final_url\033[0m"
-    fi
-
-    # 执行下载（--proxy模式跳过超时检测，直接下载）
-    if ! wget --show-progress -O - "$final_url" 2> /tmp/wget_error.log | tar -zxf - -C "$LLAMA_ROOT_DIR/"; then
-        echo -e "\033[31m❌ 下载失败！错误信息：\033[0m"
-        cat /tmp/wget_error.log
-        rm -f /tmp/wget_error.log
-        exit 1
-    else
-        echo -e "\033[32m✅ 预编译包下载并解压完成！\033[0m"
-        rm -f /tmp/wget_error.log
-        
-        # ====================== 关键修复：处理解压后多余的目录层级 ======================
-        echo -e "\033[34m【步骤4/10】检查并扁平化解压目录...\033[0m"
-        # 查找LLAMA_ROOT_DIR下的一级子目录（如llama-b7524）
-        sub_dirs=("$LLAMA_ROOT_DIR"/*/)
-        for sub_dir in "${sub_dirs[@]}"; do
-            # 仅处理实际存在的目录（排除通配符本身）
-            if [ -d "$sub_dir" ]; then
-                echo -e "\033[33m🔧 检测到多余子目录：$sub_dir，开始扁平化处理...\033[0m"
-                # 将子目录中的所有文件/文件夹移动到LLAMA_ROOT_DIR
-                mv "$sub_dir"* "$LLAMA_ROOT_DIR/"
-                # 删除空的子目录
-                rm -rf "$sub_dir"
-                echo -e "\033[32m✅ 已将子目录内容移动到主目录，删除空目录：$sub_dir\033[0m"
-            fi
-        done
-        return 0
-    fi
+error_exit() {
+    echo -e "\033[31m[ERROR] $1\033[0m" >&2
+    exit 1
+}
+info_log() {
+    echo -e "\033[32m[INFO] $1\033[0m"
 }
 
-# 检查预编译包是否已存在，避免重复下载
-if [ -f "$LLAMA_SERVER_PATH" ]; then
-    echo -e "\033[33mℹ️  预编译包已存在，跳过下载：$LLAMA_SERVER_PATH\033[0m"
-else
-    # 执行下载（根据参数自动选择地址/代理）
-    download_llama_package "$LLAMA_DOWNLOAD_URL"
+# 记录脚本执行根目录（启动脚本生成在此文件夹）
+RUN_WORK_DIR=$(pwd)
+
+# ========== 1. 检测NVIDIA GPU与驱动版本 ==========
+info_log "1. 检测NVIDIA GPU与驱动版本"
+if ! command -v nvidia-smi &> /dev/null; then
+    error_exit "未检测到NVIDIA显卡驱动，仅支持GPU模式，不支持CPU运行"
+fi
+
+DRIVER_MAJOR=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -n1 | cut -d. -f1)
+if [ -z "${DRIVER_MAJOR}" ]; then
+    error_exit "无法读取NVIDIA驱动版本，请检查显卡驱动安装"
+fi
+info_log "NVIDIA驱动主版本：${DRIVER_MAJOR}"
+
+# ========== 2. 检测/自动安装Ollama环境 ==========
+info_log "2. 检测Ollama llama-server运行环境"
+if [ ! -f "${LLAMA_SERVER_BIN}" ]; then
+    info_log "未检测到llama-server，自动执行Ollama官方安装脚本..."
+    curl -fsSL https://ollama.com/install.sh | sh
     
-    # 二次验证：确保llama-server存在（防止扁平化后仍找不到）
-    if [ ! -f "$LLAMA_SERVER_PATH" ]; then
-        echo -e "\033[31m❌ 解压后未找到llama-server，检查下载包是否完整！\033[0m"
-        exit 1
+    if [ ! -f "${LLAMA_SERVER_BIN}" ]; then
+        error_exit "Ollama安装完成后仍未找到llama-server，请手动重装"
     fi
+    info_log "Ollama安装完毕"
 fi
+info_log "Ollama环境校验通过"
 
-# ====================== 第五步：下载Qwen3-Reranker模型文件 ======================
-echo -e "\033[34m【步骤5/10】检查并下载Qwen3-Reranker模型文件...\033[0m"
-if [ -f "$MODEL_FILE_PATH" ]; then
-    echo -e "\033[33mℹ️  模型文件已存在，跳过下载：$MODEL_FILE_PATH\033[0m"
+# 匹配CUDA后端
+if [ "${DRIVER_MAJOR}" -ge 550 ] && [ -f "${OLLAMA_ROOT}/cuda_v13/libggml-cuda.so" ]; then
+    CUDA_LIB_DIR="${OLLAMA_ROOT}/cuda_v13"
+    info_log "驱动兼容CUDA13，加载cuda_v13后端"
+elif [ -f "${OLLAMA_ROOT}/cuda_v12/libggml-cuda.so" ]; then
+    CUDA_LIB_DIR="${OLLAMA_ROOT}/cuda_v12"
+    info_log "加载cuda_v12后端"
 else
-    wget -q --show-progress -O "$MODEL_FILE_PATH" "$MODEL_DOWNLOAD_URL"
-    if [ -f "$MODEL_FILE_PATH" ]; then
-        echo -e "\033[32m✅ 模型文件下载完成：$MODEL_FILE_PATH\033[0m"
-    else
-        echo -e "\033[31m❌ 模型文件下载失败，请检查网络或下载地址！\033[0m"
-        exit 1
-    fi
+    error_exit "Ollama目录无可用CUDA后端，请重装最新Ollama：curl -fsSL https://ollama.com/install.sh | sh"
 fi
 
-# ====================== 第六步：创建独立的启动脚本（仅保留动态库+核心启动参数） ======================
-echo -e "\033[34m【步骤6/10】创建/更新独立启动脚本...\033[0m"
+GGML_BACKEND_PATH="${CUDA_LIB_DIR}/libggml-cuda.so"
+LD_LIB_PATH="${OLLAMA_ROOT}:${CUDA_LIB_DIR}"
 
-# 写入极简版启动脚本（仅动态库配置+核心启动参数）
-cat > "$START_SCRIPT_PATH" << EOF
+# ========== 3. 初始化真实模型目录（放弃软链接路径） ==========
+info_log "3. 初始化真实模型目录：${MODEL_DIR}"
+mkdir -p "${MODEL_DIR}" || error_exit "创建模型目录失败"
+# 进入真实物理目录下载，不操作软链接
+cd "${MODEL_DIR}" || error_exit "进入模型目录失败"
+
+# 覆盖式下载函数（中断残缺文件自动删除重下）
+download_file() {
+    local fname="$1" furl="$2"
+    info_log "开始下载模型文件：${fname}"
+    rm -f "${fname}"
+    if ! wget --tries=3 --timeout=30 --progress=bar "${furl}"; then
+        error_exit "文件下载失败: ${fname}"
+    fi
+    info_log "${fname} 下载完成"
+}
+
+# ========== 4. 修改校验逻辑：优先判断模型文件，有文件直接跳过下载 ==========
+info_log "4. 校验重排序模型文件完整性"
+NEED_DOWNLOAD=0
+
+# 核心改动：只要gguf文件存在，直接跳过下载，不再看hash文件
+if [ -f "${MAIN_FILE}" ]; then
+    info_log "检测到本地已存在完整模型文件，跳过下载步骤"
+else
+    info_log "本地无模型文件，执行全量下载"
+    NEED_DOWNLOAD=1
+fi
+
+# ========== 5. 执行模型下载 ==========
+if [ "${NEED_DOWNLOAD}" -eq 1 ]; then
+    download_file "${MAIN_FILE}" "${MODEL_DOWNLOAD_URL}"
+    touch "${HASH_FILE}"
+    info_log "模型下载完成，生成完成标记文件"
+fi
+
+# 切回脚本运行原始目录（启动脚本生成在这里，不是模型目录）
+cd "${RUN_WORK_DIR}" || error_exit "切回运行根目录失败"
+
+# ========== 6. 在当前运行目录生成重排序服务启动脚本 ==========
+info_log "5. 在当前目录生成启动脚本：${RUN_WORK_DIR}/${START_SCRIPT_NAME}"
+cat > "./${START_SCRIPT_NAME}" <<EOF
 #!/bin/bash
-set -e
+# Qwen3-Reranker-0.6B-Q8_0-GGUF 重排序服务启动脚本
+# 自动生成，适配当前CUDA驱动环境
+# 服务地址：http://${HOST}:${PORT}
 
-# 硬编码路径（从主脚本传递）
-LLAMA_SERVER_PATH="${LLAMA_SERVER_PATH}"
-MODEL_FILE_PATH="${MODEL_FILE_PATH}"
-CUDA_LIB_DIR="${CUDA_LIB_DIR}"
-LLAMA_ROOT_DIR="${LLAMA_ROOT_DIR}"
+export GGML_BACKEND_PATH="${GGML_BACKEND_PATH}"
+export LD_LIBRARY_PATH="${LD_LIB_PATH}"
+export CUDA_VISIBLE_DEVICES=${CUDA_DEV}
 
-# 修正：切换到主脚本定义的工作目录（而非固定硬编码路径）
-cd "\$LLAMA_ROOT_DIR" || exit
-
-# 仅GPU模式配置动态库，CPU模式无操作
-[ -n "\$CUDA_LIB_DIR" ] && export LD_LIBRARY_PATH="\$CUDA_LIB_DIR:\$LD_LIBRARY_PATH"
-
-# 核心启动参数（仅保留必需项）
-"\$LLAMA_SERVER_PATH" \
-  --model "\$MODEL_FILE_PATH" \
-  --host 0.0.0.0 \
-  --port 11435 \
-  --rerank \
-  --ctx-size 8192
+${LLAMA_SERVER_BIN} \\
+    --model ${MODEL_ABS} \\
+    --host ${HOST} \\
+    --port ${PORT} \\
+    --no-webui \\
+    --rerank \\
+    --ctx-size 8192 \\
+    --n-gpu-layers 99
 EOF
 
-# 添加可执行权限
-chmod +x "$START_SCRIPT_PATH"
-echo -e "\033[32m✅ 独立启动脚本已就绪：$START_SCRIPT_PATH\033[0m"
+chmod +x "./${START_SCRIPT_NAME}"
 
-# ====================== 第七步：创建systemd开机自启服务 ======================
-echo -e "\033[34m【步骤7/10】创建/更新systemd服务文件...\033[0m"
-cat > "$SERVICE_FILE_PATH" << EOF
-[Unit]
-Description=Llama Server for Rerank
-After=network-online.target
+info_log "========================================"
+info_log "全部前置流程执行完毕，自动启动重排序服务"
+info_log "启动脚本路径：${RUN_WORK_DIR}/${START_SCRIPT_NAME}"
+info_log "重排序服务监听地址：http://${HOST}:${PORT}"
+info_log "模型真实路径：${MODEL_ABS}"
+info_log "========================================"
 
-[Service]
-ExecStart=${START_SCRIPT_PATH}
-User=root
-Group=root
-Restart=always
-RestartSec=3
-# 适配CPU/GPU模式，配置内置在启动脚本中
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-echo -e "\033[32m✅ systemd服务文件已就绪：$SERVICE_FILE_PATH\033[0m"
-
-# ====================== 第八步：仅配置开机自启（不立即启动服务） ======================
-echo -e "\033[34m【步骤8/10】配置开机自启（系统重启后自动启动）...\033[0m"
-# 重新加载systemd配置
-systemctl daemon-reload
-# 仅设置开机自启，不执行start
-systemctl enable llama-server > /dev/null 2>&1
-echo -e "\033[32m✅ 已配置llama-server开机自启（系统重启后自动启动）\033[0m"
-
-# ====================== 第九步：在当前会话直接启动服务 ======================
-echo -e "\033[34m【步骤9/10】在当前会话启动llama-server...\033[0m"
-echo -e "\033[33m🔧 执行启动脚本：$START_SCRIPT_PATH\033[0m"
-# 直接在当前会话执行启动脚本（非后台，便于查看日志）
-bash "$START_SCRIPT_PATH"
-
-# ====================== 第十步：输出常用命令 ======================
-echo -e "\033[34m【步骤10/10】输出常用运维命令...\033[0m"
-echo -e "\033[33m📌 常用命令：\033[0m"
-echo -e "  - 查看开机自启状态：systemctl is-enabled llama-server"
-echo -e "  - 手动重启服务（后续）：systemctl restart llama-server"
-echo -e "  - 手动停止服务（后续）：systemctl stop llama-server"
-echo -e "  - 再次手动启动：${START_SCRIPT_PATH}"
-echo -e "\033[32m🎉 操作完成！llama-server已在当前会话启动，监听端口11435\033[0m"
-echo -e "\033[33mℹ️  系统重启后，llama-server会自动启动\033[0m"
+# ========== 7. 直接运行生成的启动脚本 ==========
+bash "./${START_SCRIPT_NAME}"
