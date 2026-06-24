@@ -3,8 +3,8 @@
 ## 快速开始 （Quick Start） 直接调用ollama的二进制程序，没有的话会自动下载ollama
 
 ```
-# -q：静默模式（不输出下载日志）；-O-：将内容输出到标准输出（而非文件）；| bash：传递给bash执行
-wget -q "https://raw.githubusercontent.com/AuditAIH/rerank_for_dify/e6b50897519c3c8c093d207093ee373de693cbda/startup_llama.cpp.sh?$(date +%s)" -O startup_llama.cpp.sh
+# -q：静默模式bash：传递给bash执行
+wget -q "https://raw.githubusercontent.com/AuditAIH/rerank_for_dify/main/startup_llama.cpp.sh" -O startup_llama.cpp.sh
 bash startup_llama.cpp.sh
 ```
 ## 直接执行二进制程序
