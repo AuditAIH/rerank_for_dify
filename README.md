@@ -1,3 +1,4 @@
+# [合并至新位置](https://github.com/AuditAIH/audit-tool-skills/tree/main/PaddleOCR)
 # llama.cpp rerank_for_dify
 
 ## 快速开始 （Quick Start） 直接调用ollama的二进制程序，没有的话会自动下载ollama
